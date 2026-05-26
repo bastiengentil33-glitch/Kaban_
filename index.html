@@ -1,0 +1,914 @@
+<pre class="western"><code>import { useState, useEffect, useRef, useCallback } from &quot;react&quot;;
+
+// ─── INITIAL DATA ────────────────────────────────────────────────────────────
+const INITIAL_TASKS = [
+  {
+    id: 1, title: &quot;Refonte UI dashboard&quot;, description: &quot;Redesigner le tableau de bord principal avec les nouveaux composants&quot;, status: &quot;todo&quot;,
+    priority: &quot;high&quot;, color: &quot;#6C63FF&quot;, tags: [&quot;design&quot;, &quot;UI&quot;], assignee: &quot;Alice&quot;,
+    startDate: &quot;2026-05-20&quot;, dueDate: &quot;2026-06-05&quot;, progress: 0,
+    checklist: [{ id: 1, text: &quot;Maquettes Figma&quot;, done: true }, { id: 2, text: &quot;Validation équipe&quot;, done: false }, { id: 3, text: &quot;Intégration&quot;, done: false }],
+    reminders: [{ id: 1, date: &quot;2026-06-03T09:00&quot;, label: &quot;Rappel 2 jours avant&quot; }], subtasks: []
+  },
+  {
+    id: 2, title: &quot;API REST authentification&quot;, description: &quot;Implémenter JWT + OAuth2 pour le système d&#39;authentification&quot;, status: &quot;inprogress&quot;,
+    priority: &quot;high&quot;, color: &quot;#FF6584&quot;, tags: [&quot;backend&quot;, &quot;security&quot;], assignee: &quot;Bob&quot;,
+    startDate: &quot;2026-05-22&quot;, dueDate: &quot;2026-06-10&quot;, progress: 45,
+    checklist: [{ id: 1, text: &quot;Endpoints login/logout&quot;, done: true }, { id: 2, text: &quot;Refresh token&quot;, done: true }, { id: 3, text: &quot;OAuth2 Google&quot;, done: false }, { id: 4, text: &quot;Tests unitaires&quot;, done: false }],
+    reminders: [{ id: 1, date: &quot;2026-06-08T10:00&quot;, label: &quot;Revue de code&quot; }], subtasks: []
+  },
+  {
+    id: 3, title: &quot;Tests end-to-end Cypress&quot;, description: &quot;Écrire les tests E2E pour le parcours utilisateur principal&quot;, status: &quot;inprogress&quot;,
+    priority: &quot;medium&quot;, color: &quot;#43D9AD&quot;, tags: [&quot;testing&quot;, &quot;QA&quot;], assignee: &quot;Carol&quot;,
+    startDate: &quot;2026-05-25&quot;, dueDate: &quot;2026-06-15&quot;, progress: 20,
+    checklist: [{ id: 1, text: &quot;Setup Cypress&quot;, done: true }, { id: 2, text: &quot;Tests login&quot;, done: false }, { id: 3, text: &quot;Tests panier&quot;, done: false }],
+    reminders: [], subtasks: []
+  },
+  {
+    id: 4, title: &quot;Documentation technique&quot;, description: &quot;Rédiger la doc API avec Swagger et les guides développeurs&quot;, status: &quot;todo&quot;,
+    priority: &quot;low&quot;, color: &quot;#FFB347&quot;, tags: [&quot;docs&quot;], assignee: &quot;Dave&quot;,
+    startDate: &quot;2026-06-01&quot;, dueDate: &quot;2026-06-20&quot;, progress: 0,
+    checklist: [{ id: 1, text: &quot;Swagger API&quot;, done: false }, { id: 2, text: &quot;Guide onboarding&quot;, done: false }],
+    reminders: [], subtasks: []
+  },
+  {
+    id: 5, title: &quot;Migration base de données&quot;, description: &quot;Migrer PostgreSQL v13 vers v16 avec zero-downtime&quot;, status: &quot;done&quot;,
+    priority: &quot;high&quot;, color: &quot;#FF6584&quot;, tags: [&quot;backend&quot;, &quot;database&quot;], assignee: &quot;Eve&quot;,
+    startDate: &quot;2026-05-10&quot;, dueDate: &quot;2026-05-22&quot;, progress: 100,
+    checklist: [{ id: 1, text: &quot;Plan de migration&quot;, done: true }, { id: 2, text: &quot;Tests en staging&quot;, done: true }, { id: 3, text: &quot;Migration prod&quot;, done: true }],
+    reminders: [], subtasks: []
+  },
+  {
+    id: 6, title: &quot;Optimisation performances&quot;, description: &quot;Réduire le temps de chargement initial sous 1.5s&quot;, status: &quot;review&quot;,
+    priority: &quot;medium&quot;, color: &quot;#6C63FF&quot;, tags: [&quot;performance&quot;, &quot;frontend&quot;], assignee: &quot;Frank&quot;,
+    startDate: &quot;2026-05-18&quot;, dueDate: &quot;2026-06-02&quot;, progress: 80,
+    checklist: [{ id: 1, text: &quot;Audit Lighthouse&quot;, done: true }, { id: 2, text: &quot;Lazy loading images&quot;, done: true }, { id: 3, text: &quot;Code splitting&quot;, done: true }, { id: 4, text: &quot;Cache strategy&quot;, done: false }],
+    reminders: [{ id: 1, date: &quot;2026-06-01T14:00&quot;, label: &quot;Demo performance&quot; }], subtasks: []
+  },
+  {
+    id: 7, title: &quot;App mobile React Native&quot;, description: &quot;Développer la version mobile de l&#39;application&quot;, status: &quot;todo&quot;,
+    priority: &quot;medium&quot;, color: &quot;#43D9AD&quot;, tags: [&quot;mobile&quot;, &quot;React Native&quot;], assignee: &quot;Alice&quot;,
+    startDate: &quot;2026-06-10&quot;, dueDate: &quot;2026-07-15&quot;, progress: 0,
+    checklist: [{ id: 1, text: &quot;Architecture navigation&quot;, done: false }, { id: 2, text: &quot;Composants communs&quot;, done: false }, { id: 3, text: &quot;Publication stores&quot;, done: false }],
+    reminders: [], subtasks: []
+  },
+];
+
+const COLUMNS = [
+  { id: &quot;todo&quot;, label: &quot;À faire&quot;, color: &quot;#6C63FF&quot; },
+  { id: &quot;inprogress&quot;, label: &quot;En cours&quot;, color: &quot;#FFB347&quot; },
+  { id: &quot;review&quot;, label: &quot;En revue&quot;, color: &quot;#43D9AD&quot; },
+  { id: &quot;done&quot;, label: &quot;Terminé&quot;, color: &quot;#FF6584&quot; },
+];
+
+const PRIORITY_COLORS = { high: &quot;#FF6584&quot;, medium: &quot;#FFB347&quot;, low: &quot;#43D9AD&quot; };
+const PRIORITY_LABELS = { high: &quot;Haute&quot;, medium: &quot;Moyenne&quot;, low: &quot;Basse&quot; };
+const VIEWS = [
+  { id: &quot;kanban&quot;, label: &quot;Kanban&quot;, icon: &quot;⬛&quot; },
+  { id: &quot;list&quot;, label: &quot;Liste&quot;, icon: &quot;☰&quot; },
+  { id: &quot;gantt&quot;, label: &quot;Gantt&quot;, icon: &quot;📊&quot; },
+  { id: &quot;timeline&quot;, label: &quot;Timeline&quot;, icon: &quot;⏱&quot; },
+  { id: &quot;calendar&quot;, label: &quot;Calendrier&quot;, icon: &quot;📅&quot; },
+  { id: &quot;mindmap&quot;, label: &quot;Mind Map&quot;, icon: &quot;🧠&quot; },
+  { id: &quot;spreadsheet&quot;, label: &quot;Tableur&quot;, icon: &quot;📋&quot; },
+  { id: &quot;dashboard&quot;, label: &quot;Dashboard&quot;, icon: &quot;📈&quot; },
+];
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function formatDate(d) {
+  if (!d) return &quot;—&quot;;
+  return new Date(d).toLocaleDateString(&quot;fr-FR&quot;, { day: &quot;2-digit&quot;, month: &quot;short&quot;, year: &quot;numeric&quot; });
+}
+function daysLeft(d) {
+  if (!d) return null;
+  const diff = Math.ceil((new Date(d) - new Date()) / 86400000);
+  return diff;
+}
+function uuid() { return Math.random().toString(36).slice(2); }
+
+// ─── TASK MODAL ───────────────────────────────────────────────────────────────
+function TaskModal({ task, onClose, onSave, onDelete }) {
+  const [t, setT] = useState(task ? { ...task, checklist: task.checklist.map(c =&gt; ({ ...c })) } : {
+    id: uuid(), title: &quot;&quot;, description: &quot;&quot;, status: &quot;todo&quot;, priority: &quot;medium&quot;,
+    color: &quot;#6C63FF&quot;, tags: [], assignee: &quot;&quot;, startDate: &quot;&quot;, dueDate: &quot;&quot;, progress: 0,
+    checklist: [], reminders: [], subtasks: []
+  });
+  const [newCheck, setNewCheck] = useState(&quot;&quot;);
+  const [newTag, setNewTag] = useState(&quot;&quot;);
+  const [newReminder, setNewReminder] = useState({ date: &quot;&quot;, label: &quot;&quot; });
+
+  const update = (k, v) =&gt; setT(prev =&gt; ({ ...prev, [k]: v }));
+  const addCheck = () =&gt; { if (!newCheck.trim()) return; update(&quot;checklist&quot;, [...t.checklist, { id: uuid(), text: newCheck, done: false }]); setNewCheck(&quot;&quot;); };
+  const toggleCheck = (id) =&gt; update(&quot;checklist&quot;, t.checklist.map(c =&gt; c.id === id ? { ...c, done: !c.done } : c));
+  const removeCheck = (id) =&gt; update(&quot;checklist&quot;, t.checklist.filter(c =&gt; c.id !== id));
+  const addTag = () =&gt; { if (!newTag.trim()) return; update(&quot;tags&quot;, [...(t.tags || []), newTag.trim()]); setNewTag(&quot;&quot;); };
+  const removeTag = (tag) =&gt; update(&quot;tags&quot;, t.tags.filter(tg =&gt; tg !== tag));
+  const addReminder = () =&gt; { if (!newReminder.date) return; update(&quot;reminders&quot;, [...t.reminders, { id: uuid(), ...newReminder }]); setNewReminder({ date: &quot;&quot;, label: &quot;&quot; }); };
+  const checkProgress = Math.round(t.checklist.length ? (t.checklist.filter(c =&gt; c.done).length / t.checklist.length) * 100 : 0);
+
+  return (
+    &lt;div style={{ position: &quot;fixed&quot;, inset: 0, background: &quot;rgba(10,10,20,0.85)&quot;, zIndex: 1000, display: &quot;flex&quot;, alignItems: &quot;center&quot;, justifyContent: &quot;center&quot;, padding: 16 }} onClick={onClose}&gt;
+      &lt;div onClick={e =&gt; e.stopPropagation()} style={{
+        background: &quot;#0F1117&quot;, border: &quot;1px solid #2A2D3A&quot;, borderRadius: 20, width: &quot;min(720px,100%)&quot;,
+        maxHeight: &quot;90vh&quot;, overflowY: &quot;auto&quot;, padding: 32, boxShadow: &quot;0 40px 80px rgba(0,0,0,0.6)&quot;,
+        scrollbarWidth: &quot;thin&quot;, scrollbarColor: &quot;#2A2D3A #0F1117&quot;
+      }}&gt;
+        {/* Header */}
+        &lt;div style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 12, marginBottom: 24 }}&gt;
+          &lt;input type=&quot;color&quot; value={t.color} onChange={e =&gt; update(&quot;color&quot;, e.target.value)} style={{ width: 40, height: 40, border: &quot;none&quot;, borderRadius: 8, cursor: &quot;pointer&quot;, background: &quot;none&quot; }} /&gt;
+          &lt;input value={t.title} onChange={e =&gt; update(&quot;title&quot;, e.target.value)} placeholder=&quot;Titre de la tâche...&quot; style={{
+            flex: 1, background: &quot;transparent&quot;, border: &quot;none&quot;, fontSize: 22, fontWeight: 700,
+            color: &quot;#F0F0FF&quot;, outline: &quot;none&quot;, fontFamily: &quot;inherit&quot;
+          }} /&gt;
+          &lt;button onClick={onClose} style={{ background: &quot;none&quot;, border: &quot;none&quot;, color: &quot;#666&quot;, fontSize: 22, cursor: &quot;pointer&quot; }}&gt;✕&lt;/button&gt;
+        &lt;/div&gt;
+
+        {/* Grid fields */}
+        &lt;div style={{ display: &quot;grid&quot;, gridTemplateColumns: &quot;1fr 1fr&quot;, gap: 16, marginBottom: 20 }}&gt;
+          {[
+            { label: &quot;Statut&quot;, key: &quot;status&quot;, type: &quot;select&quot;, options: COLUMNS.map(c =&gt; ({ value: c.id, label: c.label })) },
+            { label: &quot;Priorité&quot;, key: &quot;priority&quot;, type: &quot;select&quot;, options: Object.entries(PRIORITY_LABELS).map(([v, l]) =&gt; ({ value: v, label: l })) },
+            { label: &quot;Assigné à&quot;, key: &quot;assignee&quot;, type: &quot;text&quot; },
+            { label: &quot;Progression (%)&quot;, key: &quot;progress&quot;, type: &quot;number&quot; },
+            { label: &quot;Date début&quot;, key: &quot;startDate&quot;, type: &quot;date&quot; },
+            { label: &quot;Date fin&quot;, key: &quot;dueDate&quot;, type: &quot;date&quot; },
+          ].map(f =&gt; (
+            &lt;div key={f.key}&gt;
+              &lt;label style={{ color: &quot;#888&quot;, fontSize: 11, textTransform: &quot;uppercase&quot;, letterSpacing: 1 }}&gt;{f.label}&lt;/label&gt;
+              {f.type === &quot;select&quot; ? (
+                &lt;select value={t[f.key]} onChange={e =&gt; update(f.key, e.target.value)} style={inputStyle}&gt;
+                  {f.options.map(o =&gt; &lt;option key={o.value} value={o.value}&gt;{o.label}&lt;/option&gt;)}
+                &lt;/select&gt;
+              ) : (
+                &lt;input type={f.type} value={t[f.key]} onChange={e =&gt; update(f.key, f.type === &quot;number&quot; ? +e.target.value : e.target.value)} style={inputStyle} min={f.type === &quot;number&quot; ? 0 : undefined} max={f.type === &quot;number&quot; ? 100 : undefined} /&gt;
+              )}
+            &lt;/div&gt;
+          ))}
+        &lt;/div&gt;
+
+        {/* Description */}
+        &lt;div style={{ marginBottom: 20 }}&gt;
+          &lt;label style={labelStyle}&gt;Description&lt;/label&gt;
+          &lt;textarea value={t.description} onChange={e =&gt; update(&quot;description&quot;, e.target.value)} rows={3} style={{ ...inputStyle, resize: &quot;vertical&quot;, lineHeight: 1.6 }} placeholder=&quot;Détails de la tâche...&quot; /&gt;
+        &lt;/div&gt;
+
+        {/* Progress bar */}
+        &lt;div style={{ marginBottom: 20 }}&gt;
+          &lt;label style={labelStyle}&gt;Progression checklist: {checkProgress}%&lt;/label&gt;
+          &lt;div style={{ height: 6, background: &quot;#1E2130&quot;, borderRadius: 4, overflow: &quot;hidden&quot; }}&gt;
+            &lt;div style={{ height: &quot;100%&quot;, width: `${checkProgress}%`, background: `linear-gradient(90deg, ${t.color}, ${t.color}cc)`, borderRadius: 4, transition: &quot;width .3s&quot; }} /&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+
+        {/* Tags */}
+        &lt;div style={{ marginBottom: 20 }}&gt;
+          &lt;label style={labelStyle}&gt;Tags&lt;/label&gt;
+          &lt;div style={{ display: &quot;flex&quot;, gap: 8, flexWrap: &quot;wrap&quot;, marginBottom: 8 }}&gt;
+            {(t.tags || []).map(tag =&gt; (
+              &lt;span key={tag} style={{ background: &quot;#1E2130&quot;, border: &quot;1px solid #2A2D3A&quot;, color: &quot;#AAA&quot;, padding: &quot;4px 10px&quot;, borderRadius: 20, fontSize: 12, display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 6 }}&gt;
+                {tag} &lt;span onClick={() =&gt; removeTag(tag)} style={{ cursor: &quot;pointer&quot;, color: &quot;#FF6584&quot; }}&gt;×&lt;/span&gt;
+              &lt;/span&gt;
+            ))}
+          &lt;/div&gt;
+          &lt;div style={{ display: &quot;flex&quot;, gap: 8 }}&gt;
+            &lt;input value={newTag} onChange={e =&gt; setNewTag(e.target.value)} onKeyDown={e =&gt; e.key === &quot;Enter&quot; &amp;&amp; addTag()} placeholder=&quot;Nouveau tag...&quot; style={{ ...inputStyle, flex: 1 }} /&gt;
+            &lt;button onClick={addTag} style={btnSmall}&gt;+&lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+
+        {/* Checklist */}
+        &lt;div style={{ marginBottom: 20 }}&gt;
+          &lt;label style={labelStyle}&gt;Checklist ({t.checklist.filter(c =&gt; c.done).length}/{t.checklist.length})&lt;/label&gt;
+          {t.checklist.map(c =&gt; (
+            &lt;div key={c.id} style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 10, padding: &quot;6px 0&quot;, borderBottom: &quot;1px solid #1E2130&quot; }}&gt;
+              &lt;div onClick={() =&gt; toggleCheck(c.id)} style={{
+                width: 18, height: 18, borderRadius: 5, border: `2px solid ${c.done ? t.color : &quot;#333&quot;}`,
+                background: c.done ? t.color : &quot;transparent&quot;, cursor: &quot;pointer&quot;, display: &quot;flex&quot;, alignItems: &quot;center&quot;, justifyContent: &quot;center&quot;, flexShrink: 0
+              }}&gt;{c.done &amp;&amp; &lt;span style={{ fontSize: 11, color: &quot;#fff&quot; }}&gt;✓&lt;/span&gt;}&lt;/div&gt;
+              &lt;span style={{ flex: 1, color: c.done ? &quot;#555&quot; : &quot;#DDD&quot;, textDecoration: c.done ? &quot;line-through&quot; : &quot;none&quot;, fontSize: 14 }}&gt;{c.text}&lt;/span&gt;
+              &lt;span onClick={() =&gt; removeCheck(c.id)} style={{ cursor: &quot;pointer&quot;, color: &quot;#FF6584&quot;, fontSize: 16 }}&gt;×&lt;/span&gt;
+            &lt;/div&gt;
+          ))}
+          &lt;div style={{ display: &quot;flex&quot;, gap: 8, marginTop: 8 }}&gt;
+            &lt;input value={newCheck} onChange={e =&gt; setNewCheck(e.target.value)} onKeyDown={e =&gt; e.key === &quot;Enter&quot; &amp;&amp; addCheck()} placeholder=&quot;Ajouter un élément...&quot; style={{ ...inputStyle, flex: 1 }} /&gt;
+            &lt;button onClick={addCheck} style={btnSmall}&gt;+&lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+
+        {/* Reminders */}
+        &lt;div style={{ marginBottom: 24 }}&gt;
+          &lt;label style={labelStyle}&gt;🔔 Rappels &amp; Notifications&lt;/label&gt;
+          {t.reminders.map(r =&gt; (
+            &lt;div key={r.id} style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 10, padding: &quot;6px 10px&quot;, background: &quot;#1A1D2E&quot;, borderRadius: 8, marginBottom: 6 }}&gt;
+              &lt;span style={{ fontSize: 16 }}&gt;🔔&lt;/span&gt;
+              &lt;span style={{ flex: 1, color: &quot;#CCC&quot;, fontSize: 13 }}&gt;{r.label || &quot;Rappel&quot;} — {formatDate(r.date)}&lt;/span&gt;
+              &lt;span onClick={() =&gt; update(&quot;reminders&quot;, t.reminders.filter(x =&gt; x.id !== r.id))} style={{ cursor: &quot;pointer&quot;, color: &quot;#FF6584&quot; }}&gt;×&lt;/span&gt;
+            &lt;/div&gt;
+          ))}
+          &lt;div style={{ display: &quot;grid&quot;, gridTemplateColumns: &quot;1fr 1fr auto&quot;, gap: 8, marginTop: 8 }}&gt;
+            &lt;input type=&quot;datetime-local&quot; value={newReminder.date} onChange={e =&gt; setNewReminder(p =&gt; ({ ...p, date: e.target.value }))} style={inputStyle} /&gt;
+            &lt;input value={newReminder.label} onChange={e =&gt; setNewReminder(p =&gt; ({ ...p, label: e.target.value }))} placeholder=&quot;Label...&quot; style={inputStyle} /&gt;
+            &lt;button onClick={addReminder} style={btnSmall}&gt;+&lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+
+        {/* Actions */}
+        &lt;div style={{ display: &quot;flex&quot;, gap: 12, justifyContent: &quot;flex-end&quot; }}&gt;
+          {task &amp;&amp; &lt;button onClick={() =&gt; { onDelete(task.id); onClose(); }} style={{ ...btnBase, background: &quot;#2A1520&quot;, color: &quot;#FF6584&quot;, border: &quot;1px solid #FF658440&quot; }}&gt;Supprimer&lt;/button&gt;}
+          &lt;button onClick={onClose} style={{ ...btnBase, background: &quot;#1E2130&quot;, color: &quot;#AAA&quot;, border: &quot;1px solid #2A2D3A&quot; }}&gt;Annuler&lt;/button&gt;
+          &lt;button onClick={() =&gt; { onSave(t); onClose(); }} style={{ ...btnBase, background: t.color, color: &quot;#fff&quot;, border: &quot;none&quot; }}&gt;💾 Enregistrer&lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+
+const inputStyle = { display: &quot;block&quot;, width: &quot;100%&quot;, background: &quot;#1A1D2E&quot;, border: &quot;1px solid #2A2D3A&quot;, borderRadius: 8, padding: &quot;8px 12px&quot;, color: &quot;#F0F0FF&quot;, fontSize: 14, outline: &quot;none&quot;, marginTop: 4, fontFamily: &quot;inherit&quot;, boxSizing: &quot;border-box&quot; };
+const labelStyle = { color: &quot;#888&quot;, fontSize: 11, textTransform: &quot;uppercase&quot;, letterSpacing: 1, display: &quot;block&quot;, marginBottom: 6 };
+const btnSmall = { background: &quot;#6C63FF&quot;, border: &quot;none&quot;, color: &quot;#fff&quot;, borderRadius: 8, padding: &quot;8px 14px&quot;, cursor: &quot;pointer&quot;, fontSize: 16, fontFamily: &quot;inherit&quot; };
+const btnBase = { padding: &quot;10px 20px&quot;, borderRadius: 10, cursor: &quot;pointer&quot;, fontFamily: &quot;inherit&quot;, fontSize: 14, fontWeight: 600 };
+
+// ─── KANBAN VIEW ──────────────────────────────────────────────────────────────
+function KanbanView({ tasks, onTaskClick, onAddTask }) {
+  const [dragging, setDragging] = useState(null);
+  const [over, setOver] = useState(null);
+
+  return (
+    &lt;div style={{ display: &quot;flex&quot;, gap: 20, padding: &quot;20px 24px&quot;, overflowX: &quot;auto&quot;, minHeight: &quot;calc(100vh - 160px)&quot; }}&gt;
+      {COLUMNS.map(col =&gt; {
+        const colTasks = tasks.filter(t =&gt; t.status === col.id);
+        return (
+          &lt;div key={col.id}
+            onDragOver={e =&gt; { e.preventDefault(); setOver(col.id); }}
+            onDrop={e =&gt; { e.preventDefault(); if (dragging) { onTaskClick({ ...dragging, status: col.id }, true); setDragging(null); setOver(null); } }}
+            style={{ minWidth: 300, flex: &quot;0 0 300px&quot; }}&gt;
+            {/* Column header */}
+            &lt;div style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, justifyContent: &quot;space-between&quot;, marginBottom: 14 }}&gt;
+              &lt;div style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 8 }}&gt;
+                &lt;div style={{ width: 10, height: 10, borderRadius: &quot;50%&quot;, background: col.color, boxShadow: `0 0 8px ${col.color}` }} /&gt;
+                &lt;span style={{ color: &quot;#DDD&quot;, fontWeight: 700, fontSize: 14 }}&gt;{col.label}&lt;/span&gt;
+                &lt;span style={{ background: &quot;#1E2130&quot;, color: &quot;#666&quot;, fontSize: 11, padding: &quot;2px 8px&quot;, borderRadius: 20 }}&gt;{colTasks.length}&lt;/span&gt;
+              &lt;/div&gt;
+              &lt;button onClick={() =&gt; onAddTask(col.id)} style={{ background: &quot;none&quot;, border: &quot;1px solid #2A2D3A&quot;, color: &quot;#666&quot;, width: 28, height: 28, borderRadius: 8, cursor: &quot;pointer&quot;, fontSize: 16, display: &quot;flex&quot;, alignItems: &quot;center&quot;, justifyContent: &quot;center&quot; }}&gt;+&lt;/button&gt;
+            &lt;/div&gt;
+
+            {/* Drop zone */}
+            &lt;div style={{
+              minHeight: 80, borderRadius: 14, padding: 4,
+              background: over === col.id ? `${col.color}11` : &quot;transparent&quot;,
+              border: over === col.id ? `2px dashed ${col.color}55` : &quot;2px dashed transparent&quot;,
+              transition: &quot;all .2s&quot;
+            }}&gt;
+              {colTasks.map(task =&gt; &lt;KanbanCard key={task.id} task={task} onClick={() =&gt; onTaskClick(task)} onDragStart={() =&gt; setDragging(task)} /&gt;)}
+            &lt;/div&gt;
+          &lt;/div&gt;
+        );
+      })}
+    &lt;/div&gt;
+  );
+}
+
+function KanbanCard({ task, onClick, onDragStart }) {
+  const dl = daysLeft(task.dueDate);
+  const checkDone = task.checklist.filter(c =&gt; c.done).length;
+  const checkTotal = task.checklist.length;
+  return (
+    &lt;div draggable onDragStart={onDragStart} onClick={onClick} style={{
+      background: &quot;#0D0F1A&quot;, border: &quot;1px solid #2A2D3A&quot;, borderLeft: `4px solid ${task.color}`,
+      borderRadius: 12, padding: 16, marginBottom: 10, cursor: &quot;pointer&quot;, transition: &quot;all .2s&quot;,
+      position: &quot;relative&quot;, overflow: &quot;hidden&quot;
+    }}
+      onMouseEnter={e =&gt; { e.currentTarget.style.transform = &quot;translateY(-2px)&quot;; e.currentTarget.style.boxShadow = `0 8px 24px ${task.color}22`; }}
+      onMouseLeave={e =&gt; { e.currentTarget.style.transform = &quot;&quot;; e.currentTarget.style.boxShadow = &quot;&quot;; }}&gt;
+      &lt;div style={{ position: &quot;absolute&quot;, top: 0, right: 0, width: 60, height: 60, background: `radial-gradient(circle at top right, ${task.color}15, transparent)`, pointerEvents: &quot;none&quot; }} /&gt;
+      &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;flex-start&quot;, marginBottom: 8 }}&gt;
+        &lt;span style={{ color: &quot;#F0F0FF&quot;, fontWeight: 600, fontSize: 14, lineHeight: 1.4, flex: 1 }}&gt;{task.title}&lt;/span&gt;
+        &lt;span style={{ fontSize: 10, padding: &quot;2px 8px&quot;, borderRadius: 12, background: `${PRIORITY_COLORS[task.priority]}22`, color: PRIORITY_COLORS[task.priority], marginLeft: 8, flexShrink: 0 }}&gt;{PRIORITY_LABELS[task.priority]}&lt;/span&gt;
+      &lt;/div&gt;
+      {task.description &amp;&amp; &lt;p style={{ color: &quot;#666&quot;, fontSize: 12, margin: &quot;0 0 10px&quot;, lineHeight: 1.5, display: &quot;-webkit-box&quot;, WebkitLineClamp: 2, WebkitBoxOrient: &quot;vertical&quot;, overflow: &quot;hidden&quot; }}&gt;{task.description}&lt;/p&gt;}
+      {(task.tags || []).length &gt; 0 &amp;&amp; (
+        &lt;div style={{ display: &quot;flex&quot;, gap: 4, flexWrap: &quot;wrap&quot;, marginBottom: 10 }}&gt;
+          {task.tags.map(tag =&gt; &lt;span key={tag} style={{ fontSize: 10, padding: &quot;2px 8px&quot;, borderRadius: 10, background: &quot;#1E2130&quot;, color: &quot;#888&quot; }}&gt;{tag}&lt;/span&gt;)}
+        &lt;/div&gt;
+      )}
+      {checkTotal &gt; 0 &amp;&amp; (
+        &lt;div style={{ marginBottom: 10 }}&gt;
+          &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, marginBottom: 4 }}&gt;
+            &lt;span style={{ fontSize: 11, color: &quot;#666&quot; }}&gt;☑ {checkDone}/{checkTotal}&lt;/span&gt;
+            &lt;span style={{ fontSize: 11, color: &quot;#666&quot; }}&gt;{Math.round(checkDone / checkTotal * 100)}%&lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div style={{ height: 3, background: &quot;#1E2130&quot;, borderRadius: 2 }}&gt;
+            &lt;div style={{ height: &quot;100%&quot;, width: `${checkDone / checkTotal * 100}%`, background: task.color, borderRadius: 2 }} /&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      )}
+      &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;center&quot; }}&gt;
+        &lt;span style={{ fontSize: 11, color: task.assignee ? &quot;#888&quot; : &quot;#444&quot; }}&gt;👤 {task.assignee || &quot;Non assigné&quot;}&lt;/span&gt;
+        {task.dueDate &amp;&amp; (
+          &lt;span style={{ fontSize: 11, color: dl !== null &amp;&amp; dl &lt; 3 ? &quot;#FF6584&quot; : &quot;#666&quot; }}&gt;
+            {dl !== null &amp;&amp; dl &lt; 0 ? &quot;⚠ En retard&quot; : dl !== null &amp;&amp; dl &lt;= 3 ? `⏰ ${dl}j restants` : `📅 ${formatDate(task.dueDate)}`}
+          &lt;/span&gt;
+        )}
+      &lt;/div&gt;
+      {task.reminders?.length &gt; 0 &amp;&amp; &lt;div style={{ marginTop: 6, fontSize: 11, color: &quot;#FFB347&quot; }}&gt;🔔 {task.reminders.length} rappel{task.reminders.length &gt; 1 ? &quot;s&quot; : &quot;&quot;}&lt;/div&gt;}
+    &lt;/div&gt;
+  );
+}
+
+// ─── LIST VIEW ────────────────────────────────────────────────────────────────
+function ListView({ tasks, onTaskClick }) {
+  const [sort, setSort] = useState(&quot;dueDate&quot;);
+  const sorted = [...tasks].sort((a, b) =&gt; {
+    if (sort === &quot;priority&quot;) return [&quot;high&quot;, &quot;medium&quot;, &quot;low&quot;].indexOf(a.priority) - [&quot;high&quot;, &quot;medium&quot;, &quot;low&quot;].indexOf(b.priority);
+    if (sort === &quot;dueDate&quot;) return (a.dueDate || &quot;z&quot;) &gt; (b.dueDate || &quot;z&quot;) ? 1 : -1;
+    if (sort === &quot;title&quot;) return a.title.localeCompare(b.title);
+    return 0;
+  });
+  return (
+    &lt;div style={{ padding: &quot;20px 24px&quot; }}&gt;
+      &lt;div style={{ display: &quot;flex&quot;, gap: 8, marginBottom: 16 }}&gt;
+        {[&quot;title&quot;, &quot;dueDate&quot;, &quot;priority&quot;].map(s =&gt; (
+          &lt;button key={s} onClick={() =&gt; setSort(s)} style={{ padding: &quot;6px 14px&quot;, borderRadius: 8, border: &quot;1px solid #2A2D3A&quot;, background: sort === s ? &quot;#6C63FF&quot; : &quot;#1A1D2E&quot;, color: sort === s ? &quot;#fff&quot; : &quot;#888&quot;, cursor: &quot;pointer&quot;, fontSize: 12, fontFamily: &quot;inherit&quot; }}&gt;
+            {s === &quot;title&quot; ? &quot;Titre&quot; : s === &quot;dueDate&quot; ? &quot;Échéance&quot; : &quot;Priorité&quot;}
+          &lt;/button&gt;
+        ))}
+      &lt;/div&gt;
+      &lt;div style={{ background: &quot;#0D0F1A&quot;, border: &quot;1px solid #2A2D3A&quot;, borderRadius: 14, overflow: &quot;hidden&quot; }}&gt;
+        &lt;div style={{ display: &quot;grid&quot;, gridTemplateColumns: &quot;3fr 1fr 1fr 1fr 1fr 80px&quot;, padding: &quot;10px 16px&quot;, borderBottom: &quot;1px solid #2A2D3A&quot;, background: &quot;#1A1D2E&quot; }}&gt;
+          {[&quot;Tâche&quot;, &quot;Statut&quot;, &quot;Priorité&quot;, &quot;Assigné&quot;, &quot;Échéance&quot;, &quot;Avancement&quot;].map(h =&gt; (
+            &lt;span key={h} style={{ color: &quot;#666&quot;, fontSize: 11, textTransform: &quot;uppercase&quot;, letterSpacing: 1 }}&gt;{h}&lt;/span&gt;
+          ))}
+        &lt;/div&gt;
+        {sorted.map(task =&gt; {
+          const col = COLUMNS.find(c =&gt; c.id === task.status);
+          const dl = daysLeft(task.dueDate);
+          return (
+            &lt;div key={task.id} onClick={() =&gt; onTaskClick(task)} style={{ display: &quot;grid&quot;, gridTemplateColumns: &quot;3fr 1fr 1fr 1fr 1fr 80px&quot;, padding: &quot;12px 16px&quot;, borderBottom: &quot;1px solid #1A1D2E&quot;, cursor: &quot;pointer&quot;, transition: &quot;background .15s&quot;, alignItems: &quot;center&quot; }}
+              onMouseEnter={e =&gt; e.currentTarget.style.background = &quot;#1A1D2E&quot;}
+              onMouseLeave={e =&gt; e.currentTarget.style.background = &quot;&quot;}&gt;
+              &lt;div style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 10 }}&gt;
+                &lt;div style={{ width: 8, height: 8, borderRadius: &quot;50%&quot;, background: task.color, flexShrink: 0 }} /&gt;
+                &lt;div&gt;
+                  &lt;div style={{ color: &quot;#F0F0FF&quot;, fontSize: 14, fontWeight: 500 }}&gt;{task.title}&lt;/div&gt;
+                  {task.checklist.length &gt; 0 &amp;&amp; &lt;div style={{ color: &quot;#555&quot;, fontSize: 11 }}&gt;☑ {task.checklist.filter(c =&gt; c.done).length}/{task.checklist.length}&lt;/div&gt;}
+                &lt;/div&gt;
+              &lt;/div&gt;
+              &lt;span style={{ fontSize: 12, color: col?.color, background: `${col?.color}22`, padding: &quot;3px 8px&quot;, borderRadius: 12, display: &quot;inline-block&quot; }}&gt;{col?.label}&lt;/span&gt;
+              &lt;span style={{ fontSize: 12, color: PRIORITY_COLORS[task.priority] }}&gt;{PRIORITY_LABELS[task.priority]}&lt;/span&gt;
+              &lt;span style={{ fontSize: 13, color: &quot;#888&quot; }}&gt;{task.assignee || &quot;—&quot;}&lt;/span&gt;
+              &lt;span style={{ fontSize: 12, color: dl !== null &amp;&amp; dl &lt; 3 ? &quot;#FF6584&quot; : &quot;#888&quot; }}&gt;{formatDate(task.dueDate)}&lt;/span&gt;
+              &lt;div&gt;
+                &lt;div style={{ height: 4, background: &quot;#1E2130&quot;, borderRadius: 2, overflow: &quot;hidden&quot; }}&gt;
+                  &lt;div style={{ height: &quot;100%&quot;, width: `${task.progress}%`, background: task.color }} /&gt;
+                &lt;/div&gt;
+                &lt;span style={{ fontSize: 10, color: &quot;#555&quot; }}&gt;{task.progress}%&lt;/span&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+          );
+        })}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+
+// ─── GANTT VIEW ───────────────────────────────────────────────────────────────
+function GanttView({ tasks, onTaskClick }) {
+  const today = new Date(&quot;2026-05-24&quot;);
+  const start = new Date(&quot;2026-05-01&quot;);
+  const end = new Date(&quot;2026-07-31&quot;);
+  const totalDays = Math.ceil((end - start) / 86400000);
+  const weeks = [];
+  for (let i = 0; i &lt; totalDays; i += 7) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    weeks.push(d);
+  }
+  const COL_W = 28;
+
+  return (
+    &lt;div style={{ padding: &quot;20px 24px&quot;, overflowX: &quot;auto&quot; }}&gt;
+      &lt;div style={{ minWidth: 900 }}&gt;
+        {/* Header weeks */}
+        &lt;div style={{ display: &quot;flex&quot;, marginLeft: 220, marginBottom: 0 }}&gt;
+          {weeks.map((w, i) =&gt; (
+            &lt;div key={i} style={{ width: COL_W * 7, flexShrink: 0, fontSize: 10, color: &quot;#555&quot;, borderLeft: &quot;1px solid #2A2D3A&quot;, paddingLeft: 4, paddingBottom: 8 }}&gt;
+              {w.toLocaleDateString(&quot;fr-FR&quot;, { day: &quot;2-digit&quot;, month: &quot;short&quot; })}
+            &lt;/div&gt;
+          ))}
+        &lt;/div&gt;
+        {/* Today line */}
+        &lt;div style={{ position: &quot;relative&quot; }}&gt;
+          &lt;div style={{
+            position: &quot;absolute&quot;, top: 0, bottom: 0,
+            left: 220 + Math.ceil((today - start) / 86400000) * COL_W,
+            width: 2, background: &quot;#FF6584&quot;, zIndex: 10,
+            boxShadow: &quot;0 0 8px #FF658488&quot;
+          }}&gt;
+            &lt;div style={{ position: &quot;absolute&quot;, top: -18, left: -16, fontSize: 9, color: &quot;#FF6584&quot;, background: &quot;#0D0F1A&quot;, padding: &quot;2px 6px&quot;, borderRadius: 4, whiteSpace: &quot;nowrap&quot; }}&gt;Aujourd&#39;hui&lt;/div&gt;
+          &lt;/div&gt;
+          {tasks.map(task =&gt; {
+            const s = task.startDate ? new Date(task.startDate) : today;
+            const e2 = task.dueDate ? new Date(task.dueDate) : today;
+            const left = Math.max(0, Math.ceil((s - start) / 86400000)) * COL_W;
+            const width = Math.max(COL_W, Math.ceil((e2 - s) / 86400000) * COL_W);
+            return (
+              &lt;div key={task.id} style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, marginBottom: 8, height: 40 }}&gt;
+                &lt;div style={{ width: 220, flexShrink: 0, paddingRight: 12 }}&gt;
+                  &lt;div style={{ color: &quot;#CCC&quot;, fontSize: 13, fontWeight: 500, whiteSpace: &quot;nowrap&quot;, overflow: &quot;hidden&quot;, textOverflow: &quot;ellipsis&quot; }}&gt;{task.title}&lt;/div&gt;
+                  &lt;div style={{ color: &quot;#555&quot;, fontSize: 11 }}&gt;{task.assignee}&lt;/div&gt;
+                &lt;/div&gt;
+                &lt;div style={{ flex: 1, position: &quot;relative&quot;, height: 28, background: &quot;#0D0F1A&quot;, borderRadius: 6, border: &quot;1px solid #1E2130&quot; }}&gt;
+                  &lt;div onClick={() =&gt; onTaskClick(task)} style={{
+                    position: &quot;absolute&quot;, left, width, height: &quot;100%&quot;,
+                    background: `linear-gradient(90deg, ${task.color}, ${task.color}bb)`,
+                    borderRadius: 6, cursor: &quot;pointer&quot;, display: &quot;flex&quot;, alignItems: &quot;center&quot;, paddingLeft: 8,
+                    boxShadow: `0 2px 8px ${task.color}44`, minWidth: 4
+                  }}&gt;
+                    &lt;div style={{ width: `${task.progress}%`, height: &quot;100%&quot;, background: &quot;rgba(255,255,255,0.2)&quot;, position: &quot;absolute&quot;, left: 0, top: 0, borderRadius: 6 }} /&gt;
+                    &lt;span style={{ fontSize: 11, color: &quot;#fff&quot;, fontWeight: 600, position: &quot;relative&quot;, whiteSpace: &quot;nowrap&quot;, overflow: &quot;hidden&quot;, textOverflow: &quot;ellipsis&quot; }}&gt;{width &gt; 60 ? task.title : &quot;&quot;}&lt;/span&gt;
+                  &lt;/div&gt;
+                &lt;/div&gt;
+              &lt;/div&gt;
+            );
+          })}
+        &lt;/div&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+
+// ─── TIMELINE VIEW ────────────────────────────────────────────────────────────
+function TimelineView({ tasks, onTaskClick }) {
+  const sorted = [...tasks].filter(t =&gt; t.dueDate).sort((a, b) =&gt; a.dueDate &gt; b.dueDate ? 1 : -1);
+  return (
+    &lt;div style={{ padding: &quot;20px 24px&quot;, maxWidth: 800, margin: &quot;0 auto&quot; }}&gt;
+      &lt;div style={{ position: &quot;relative&quot;, paddingLeft: 40 }}&gt;
+        &lt;div style={{ position: &quot;absolute&quot;, left: 19, top: 0, bottom: 0, width: 2, background: &quot;linear-gradient(180deg, #6C63FF, #FF6584, #43D9AD)&quot;, borderRadius: 2 }} /&gt;
+        {sorted.map((task, i) =&gt; (
+          &lt;div key={task.id} style={{ position: &quot;relative&quot;, marginBottom: 28, paddingLeft: 28 }}&gt;
+            &lt;div style={{ position: &quot;absolute&quot;, left: -8, top: 12, width: 20, height: 20, borderRadius: &quot;50%&quot;, background: task.color, border: &quot;3px solid #0D0F1A&quot;, boxShadow: `0 0 12px ${task.color}88`, zIndex: 2 }} /&gt;
+            &lt;div onClick={() =&gt; onTaskClick(task)} style={{
+              background: &quot;#0D0F1A&quot;, border: `1px solid ${task.color}44`, borderLeft: `4px solid ${task.color}`,
+              borderRadius: 12, padding: 16, cursor: &quot;pointer&quot;, transition: &quot;transform .2s&quot;
+            }}
+              onMouseEnter={e =&gt; e.currentTarget.style.transform = &quot;translateX(4px)&quot;}
+              onMouseLeave={e =&gt; e.currentTarget.style.transform = &quot;&quot;}&gt;
+              &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;center&quot;, marginBottom: 6 }}&gt;
+                &lt;span style={{ color: &quot;#F0F0FF&quot;, fontWeight: 600, fontSize: 15 }}&gt;{task.title}&lt;/span&gt;
+                &lt;span style={{ fontSize: 12, color: &quot;#888&quot; }}&gt;📅 {formatDate(task.dueDate)}&lt;/span&gt;
+              &lt;/div&gt;
+              &lt;div style={{ color: &quot;#666&quot;, fontSize: 13, marginBottom: 8 }}&gt;{task.description}&lt;/div&gt;
+              &lt;div style={{ display: &quot;flex&quot;, gap: 12, alignItems: &quot;center&quot; }}&gt;
+                &lt;span style={{ fontSize: 12, color: PRIORITY_COLORS[task.priority] }}&gt;● {PRIORITY_LABELS[task.priority]}&lt;/span&gt;
+                &lt;span style={{ fontSize: 12, color: &quot;#888&quot; }}&gt;👤 {task.assignee}&lt;/span&gt;
+                &lt;div style={{ flex: 1, height: 4, background: &quot;#1E2130&quot;, borderRadius: 2 }}&gt;
+                  &lt;div style={{ height: &quot;100%&quot;, width: `${task.progress}%`, background: task.color, borderRadius: 2 }} /&gt;
+                &lt;/div&gt;
+                &lt;span style={{ fontSize: 11, color: &quot;#555&quot; }}&gt;{task.progress}%&lt;/span&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+        ))}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+
+// ─── CALENDAR VIEW ────────────────────────────────────────────────────────────
+function CalendarView({ tasks, onTaskClick }) {
+  const [current, setCurrent] = useState(new Date(&quot;2026-06-01&quot;));
+  const year = current.getFullYear(), month = current.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i &lt; (firstDay === 0 ? 6 : firstDay - 1); i++) cells.push(null);
+  for (let d = 1; d &lt;= daysInMonth; d++) cells.push(d);
+  const monthStr = current.toLocaleDateString(&quot;fr-FR&quot;, { month: &quot;long&quot;, year: &quot;numeric&quot; });
+  const prev = () =&gt; setCurrent(new Date(year, month - 1, 1));
+  const next = () =&gt; setCurrent(new Date(year, month + 1, 1));
+
+  return (
+    &lt;div style={{ padding: &quot;20px 24px&quot; }}&gt;
+      &lt;div style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 16, marginBottom: 20 }}&gt;
+        &lt;button onClick={prev} style={navBtn}&gt;‹&lt;/button&gt;
+        &lt;h3 style={{ color: &quot;#F0F0FF&quot;, margin: 0, fontSize: 18, fontWeight: 700, textTransform: &quot;capitalize&quot; }}&gt;{monthStr}&lt;/h3&gt;
+        &lt;button onClick={next} style={navBtn}&gt;›&lt;/button&gt;
+      &lt;/div&gt;
+      &lt;div style={{ display: &quot;grid&quot;, gridTemplateColumns: &quot;repeat(7, 1fr)&quot;, gap: 2, marginBottom: 2 }}&gt;
+        {[&quot;Lun&quot;, &quot;Mar&quot;, &quot;Mer&quot;, &quot;Jeu&quot;, &quot;Ven&quot;, &quot;Sam&quot;, &quot;Dim&quot;].map(d =&gt; (
+          &lt;div key={d} style={{ textAlign: &quot;center&quot;, color: &quot;#555&quot;, fontSize: 11, fontWeight: 700, padding: &quot;8px 0&quot;, textTransform: &quot;uppercase&quot;, letterSpacing: 1 }}&gt;{d}&lt;/div&gt;
+        ))}
+      &lt;/div&gt;
+      &lt;div style={{ display: &quot;grid&quot;, gridTemplateColumns: &quot;repeat(7, 1fr)&quot;, gap: 2 }}&gt;
+        {cells.map((day, i) =&gt; {
+          if (!day) return &lt;div key={`e${i}`} /&gt;;
+          const dateStr = `${year}-${String(month + 1).padStart(2, &quot;0&quot;)}-${String(day).padStart(2, &quot;0&quot;)}`;
+          const dayTasks = tasks.filter(t =&gt; t.dueDate === dateStr || t.startDate === dateStr);
+          const isToday = dateStr === &quot;2026-05-24&quot;;
+          return (
+            &lt;div key={day} style={{
+              minHeight: 80, background: &quot;#0D0F1A&quot;, border: `1px solid ${isToday ? &quot;#6C63FF&quot; : &quot;#1E2130&quot;}`,
+              borderRadius: 8, padding: &quot;6px 8px&quot;, position: &quot;relative&quot;
+            }}&gt;
+              &lt;span style={{ color: isToday ? &quot;#6C63FF&quot; : &quot;#666&quot;, fontSize: 13, fontWeight: isToday ? 700 : 400 }}&gt;{day}&lt;/span&gt;
+              {dayTasks.map(t =&gt; (
+                &lt;div key={t.id} onClick={() =&gt; onTaskClick(t)} style={{
+                  marginTop: 3, padding: &quot;2px 6px&quot;, borderRadius: 4, background: `${t.color}33`,
+                  borderLeft: `3px solid ${t.color}`, fontSize: 10, color: &quot;#CCC&quot;, cursor: &quot;pointer&quot;,
+                  whiteSpace: &quot;nowrap&quot;, overflow: &quot;hidden&quot;, textOverflow: &quot;ellipsis&quot;
+                }}&gt;{t.title}&lt;/div&gt;
+              ))}
+            &lt;/div&gt;
+          );
+        })}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+const navBtn = { background: &quot;#1A1D2E&quot;, border: &quot;1px solid #2A2D3A&quot;, color: &quot;#888&quot;, width: 32, height: 32, borderRadius: 8, cursor: &quot;pointer&quot;, fontSize: 18, display: &quot;flex&quot;, alignItems: &quot;center&quot;, justifyContent: &quot;center&quot; };
+
+// ─── MIND MAP VIEW ────────────────────────────────────────────────────────────
+function MindMapView({ tasks, onTaskClick }) {
+  const cx = 500, cy = 320, r1 = 180;
+  const grouped = COLUMNS.map(col =&gt; ({ col, tasks: tasks.filter(t =&gt; t.status === col.id) }));
+  const total = grouped.length;
+
+  return (
+    &lt;div style={{ padding: &quot;20px 24px&quot;, overflowX: &quot;auto&quot; }}&gt;
+      &lt;svg width=&quot;1000&quot; height=&quot;640&quot; style={{ display: &quot;block&quot;, margin: &quot;0 auto&quot; }}&gt;
+        &lt;defs&gt;
+          &lt;filter id=&quot;glow&quot;&gt;
+            &lt;feGaussianBlur stdDeviation=&quot;3&quot; result=&quot;coloredBlur&quot; /&gt;
+            &lt;feMerge&gt;&lt;feMergeNode in=&quot;coloredBlur&quot; /&gt;&lt;feMergeNode in=&quot;SourceGraphic&quot; /&gt;&lt;/feMerge&gt;
+          &lt;/filter&gt;
+        &lt;/defs&gt;
+        {/* Center node */}
+        &lt;circle cx={cx} cy={cy} r={50} fill=&quot;#6C63FF22&quot; stroke=&quot;#6C63FF&quot; strokeWidth={2} filter=&quot;url(#glow)&quot; /&gt;
+        &lt;text x={cx} y={cy - 6} textAnchor=&quot;middle&quot; fill=&quot;#F0F0FF&quot; fontSize={13} fontWeight=&quot;bold&quot;&gt;🧩 Projet&lt;/text&gt;
+        &lt;text x={cx} y={cy + 12} textAnchor=&quot;middle&quot; fill=&quot;#888&quot; fontSize={11}&gt;{tasks.length} tâches&lt;/text&gt;
+
+        {grouped.map(({ col, tasks: colTasks }, gi) =&gt; {
+          const angle = (gi / total) * 2 * Math.PI - Math.PI / 2;
+          const bx = cx + Math.cos(angle) * r1, by = cy + Math.sin(angle) * r1;
+          const r2 = colTasks.length &gt; 3 ? 260 : 230;
+
+          return (
+            &lt;g key={col.id}&gt;
+              {/* Line to column */}
+              &lt;line x1={cx} y1={cy} x2={bx} y2={by} stroke={col.color} strokeWidth={2} strokeOpacity={0.5} /&gt;
+              {/* Column node */}
+              &lt;circle cx={bx} cy={by} r={32} fill={`${col.color}22`} stroke={col.color} strokeWidth={1.5} /&gt;
+              &lt;text x={bx} y={by - 4} textAnchor=&quot;middle&quot; fill={col.color} fontSize={11} fontWeight=&quot;bold&quot;&gt;{col.label}&lt;/text&gt;
+              &lt;text x={bx} y={by + 12} textAnchor=&quot;middle&quot; fill=&quot;#888&quot; fontSize={10}&gt;{colTasks.length}&lt;/text&gt;
+
+              {/* Task nodes */}
+              {colTasks.map((task, ti) =&gt; {
+                const subAngle = angle + (ti - (colTasks.length - 1) / 2) * 0.45;
+                const tx = cx + Math.cos(subAngle) * r2, ty = cy + Math.sin(subAngle) * r2;
+                return (
+                  &lt;g key={task.id} style={{ cursor: &quot;pointer&quot; }} onClick={() =&gt; onTaskClick(task)}&gt;
+                    &lt;line x1={bx} y1={by} x2={tx} y2={ty} stroke={task.color} strokeWidth={1} strokeOpacity={0.3} strokeDasharray=&quot;4 3&quot; /&gt;
+                    &lt;rect x={tx - 55} y={ty - 18} width={110} height={36} rx={8} fill=&quot;#0D0F1A&quot; stroke={task.color} strokeWidth={1} /&gt;
+                    &lt;text x={tx} y={ty - 3} textAnchor=&quot;middle&quot; fill=&quot;#DDD&quot; fontSize={10} fontWeight=&quot;600&quot;&gt;{task.title.slice(0, 18)}{task.title.length &gt; 18 ? &quot;…&quot; : &quot;&quot;}&lt;/text&gt;
+                    &lt;text x={tx} y={ty + 11} textAnchor=&quot;middle&quot; fill={PRIORITY_COLORS[task.priority]} fontSize={9}&gt;{PRIORITY_LABELS[task.priority]}&lt;/text&gt;
+                  &lt;/g&gt;
+                );
+              })}
+            &lt;/g&gt;
+          );
+        })}
+      &lt;/svg&gt;
+    &lt;/div&gt;
+  );
+}
+
+// ─── SPREADSHEET VIEW ─────────────────────────────────────────────────────────
+function SpreadsheetView({ tasks, onTaskClick }) {
+  const [editCell, setEditCell] = useState(null);
+  const [editVal, setEditVal] = useState(&quot;&quot;);
+  const headers = [&quot;Titre&quot;, &quot;Statut&quot;, &quot;Priorité&quot;, &quot;Assigné&quot;, &quot;Début&quot;, &quot;Fin&quot;, &quot;Avancement&quot;, &quot;Tags&quot;];
+
+  return (
+    &lt;div style={{ padding: &quot;20px 24px&quot;, overflowX: &quot;auto&quot; }}&gt;
+      &lt;div style={{ background: &quot;#0D0F1A&quot;, border: &quot;1px solid #2A2D3A&quot;, borderRadius: 14, overflow: &quot;hidden&quot; }}&gt;
+        &lt;table style={{ borderCollapse: &quot;collapse&quot;, width: &quot;100%&quot;, minWidth: 900 }}&gt;
+          &lt;thead&gt;
+            &lt;tr style={{ background: &quot;#1A1D2E&quot; }}&gt;
+              &lt;th style={thStyle}&gt;#&lt;/th&gt;
+              {headers.map(h =&gt; &lt;th key={h} style={thStyle}&gt;{h}&lt;/th&gt;)}
+            &lt;/tr&gt;
+          &lt;/thead&gt;
+          &lt;tbody&gt;
+            {tasks.map((task, ri) =&gt; {
+              const col = COLUMNS.find(c =&gt; c.id === task.status);
+              return (
+                &lt;tr key={task.id}
+                  onMouseEnter={e =&gt; e.currentTarget.style.background = &quot;#1A1D2E&quot;}
+                  onMouseLeave={e =&gt; e.currentTarget.style.background = &quot;&quot;}&gt;
+                  &lt;td style={{ ...tdStyle, color: &quot;#444&quot;, fontSize: 11 }}&gt;{ri + 1}&lt;/td&gt;
+                  &lt;td style={tdStyle} onClick={() =&gt; onTaskClick(task)}&gt;
+                    &lt;div style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 8 }}&gt;
+                      &lt;div style={{ width: 8, height: 8, borderRadius: &quot;50%&quot;, background: task.color }} /&gt;
+                      &lt;span style={{ color: &quot;#F0F0FF&quot;, fontSize: 13, fontWeight: 500 }}&gt;{task.title}&lt;/span&gt;
+                    &lt;/div&gt;
+                  &lt;/td&gt;
+                  &lt;td style={tdStyle}&gt;&lt;span style={{ color: col?.color, fontSize: 12 }}&gt;{col?.label}&lt;/span&gt;&lt;/td&gt;
+                  &lt;td style={tdStyle}&gt;&lt;span style={{ color: PRIORITY_COLORS[task.priority], fontSize: 12 }}&gt;● {PRIORITY_LABELS[task.priority]}&lt;/span&gt;&lt;/td&gt;
+                  &lt;td style={tdStyle}&gt;&lt;span style={{ color: &quot;#888&quot;, fontSize: 12 }}&gt;{task.assignee || &quot;—&quot;}&lt;/span&gt;&lt;/td&gt;
+                  &lt;td style={tdStyle}&gt;&lt;span style={{ color: &quot;#888&quot;, fontSize: 12 }}&gt;{formatDate(task.startDate)}&lt;/span&gt;&lt;/td&gt;
+                  &lt;td style={tdStyle}&gt;&lt;span style={{ color: daysLeft(task.dueDate) !== null &amp;&amp; daysLeft(task.dueDate) &lt; 3 ? &quot;#FF6584&quot; : &quot;#888&quot;, fontSize: 12 }}&gt;{formatDate(task.dueDate)}&lt;/span&gt;&lt;/td&gt;
+                  &lt;td style={tdStyle}&gt;
+                    &lt;div style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 8 }}&gt;
+                      &lt;div style={{ flex: 1, height: 6, background: &quot;#1E2130&quot;, borderRadius: 3, overflow: &quot;hidden&quot; }}&gt;
+                        &lt;div style={{ height: &quot;100%&quot;, width: `${task.progress}%`, background: task.color }} /&gt;
+                      &lt;/div&gt;
+                      &lt;span style={{ fontSize: 11, color: &quot;#666&quot;, width: 30 }}&gt;{task.progress}%&lt;/span&gt;
+                    &lt;/div&gt;
+                  &lt;/td&gt;
+                  &lt;td style={tdStyle}&gt;&lt;span style={{ color: &quot;#666&quot;, fontSize: 11 }}&gt;{(task.tags || []).join(&quot;, &quot;) || &quot;—&quot;}&lt;/span&gt;&lt;/td&gt;
+                &lt;/tr&gt;
+              );
+            })}
+          &lt;/tbody&gt;
+        &lt;/table&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+const thStyle = { padding: &quot;10px 16px&quot;, textAlign: &quot;left&quot;, color: &quot;#555&quot;, fontSize: 11, textTransform: &quot;uppercase&quot;, letterSpacing: 1, fontWeight: 700, borderBottom: &quot;1px solid #2A2D3A&quot;, whiteSpace: &quot;nowrap&quot; };
+const tdStyle = { padding: &quot;10px 16px&quot;, borderBottom: &quot;1px solid #1A1D2E&quot;, verticalAlign: &quot;middle&quot; };
+
+// ─── DASHBOARD VIEW ───────────────────────────────────────────────────────────
+function DashboardView({ tasks, onTaskClick }) {
+  const total = tasks.length;
+  const byStatus = COLUMNS.map(col =&gt; ({ ...col, count: tasks.filter(t =&gt; t.status === col.id).length }));
+  const byPriority = Object.entries(PRIORITY_LABELS).map(([k, v]) =&gt; ({ key: k, label: v, count: tasks.filter(t =&gt; t.priority === k).length, color: PRIORITY_COLORS[k] }));
+  const avgProgress = Math.round(tasks.reduce((a, t) =&gt; a + t.progress, 0) / (total || 1));
+  const overdue = tasks.filter(t =&gt; t.dueDate &amp;&amp; daysLeft(t.dueDate) !== null &amp;&amp; daysLeft(t.dueDate) &lt; 0 &amp;&amp; t.status !== &quot;done&quot;).length;
+  const upcoming = tasks.filter(t =&gt; t.dueDate &amp;&amp; daysLeft(t.dueDate) !== null &amp;&amp; daysLeft(t.dueDate) &lt;= 7 &amp;&amp; daysLeft(t.dueDate) &gt;= 0).length;
+  const withReminders = tasks.filter(t =&gt; t.reminders?.length &gt; 0).length;
+
+  return (
+    &lt;div style={{ padding: &quot;20px 24px&quot; }}&gt;
+      {/* KPIs */}
+      &lt;div style={{ display: &quot;grid&quot;, gridTemplateColumns: &quot;repeat(auto-fill, minmax(200px, 1fr))&quot;, gap: 16, marginBottom: 24 }}&gt;
+        {[
+          { label: &quot;Total tâches&quot;, value: total, icon: &quot;📋&quot;, color: &quot;#6C63FF&quot; },
+          { label: &quot;Terminées&quot;, value: byStatus.find(b =&gt; b.id === &quot;done&quot;)?.count || 0, icon: &quot;✅&quot;, color: &quot;#43D9AD&quot; },
+          { label: &quot;En retard&quot;, value: overdue, icon: &quot;⚠️&quot;, color: &quot;#FF6584&quot; },
+          { label: &quot;Cette semaine&quot;, value: upcoming, icon: &quot;⏰&quot;, color: &quot;#FFB347&quot; },
+          { label: &quot;Progression moy.&quot;, value: `${avgProgress}%`, icon: &quot;📈&quot;, color: &quot;#6C63FF&quot; },
+          { label: &quot;Rappels actifs&quot;, value: withReminders, icon: &quot;🔔&quot;, color: &quot;#FF9F7E&quot; },
+        ].map(kpi =&gt; (
+          &lt;div key={kpi.label} style={{ background: &quot;#0D0F1A&quot;, border: `1px solid ${kpi.color}33`, borderRadius: 14, padding: 20, position: &quot;relative&quot;, overflow: &quot;hidden&quot; }}&gt;
+            &lt;div style={{ position: &quot;absolute&quot;, top: -10, right: -10, fontSize: 48, opacity: 0.1 }}&gt;{kpi.icon}&lt;/div&gt;
+            &lt;div style={{ fontSize: 28, fontWeight: 800, color: kpi.color, marginBottom: 4 }}&gt;{kpi.value}&lt;/div&gt;
+            &lt;div style={{ color: &quot;#666&quot;, fontSize: 13 }}&gt;{kpi.label}&lt;/div&gt;
+          &lt;/div&gt;
+        ))}
+      &lt;/div&gt;
+
+      &lt;div style={{ display: &quot;grid&quot;, gridTemplateColumns: &quot;1fr 1fr&quot;, gap: 20, marginBottom: 24 }}&gt;
+        {/* Bar chart by status */}
+        &lt;div style={{ background: &quot;#0D0F1A&quot;, border: &quot;1px solid #2A2D3A&quot;, borderRadius: 14, padding: 20 }}&gt;
+          &lt;h4 style={{ color: &quot;#DDD&quot;, margin: &quot;0 0 16px&quot;, fontSize: 14 }}&gt;Par statut&lt;/h4&gt;
+          {byStatus.map(col =&gt; (
+            &lt;div key={col.id} style={{ marginBottom: 12 }}&gt;
+              &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, marginBottom: 4 }}&gt;
+                &lt;span style={{ color: &quot;#888&quot;, fontSize: 13 }}&gt;{col.label}&lt;/span&gt;
+                &lt;span style={{ color: col.color, fontSize: 13, fontWeight: 600 }}&gt;{col.count}&lt;/span&gt;
+              &lt;/div&gt;
+              &lt;div style={{ height: 8, background: &quot;#1E2130&quot;, borderRadius: 4, overflow: &quot;hidden&quot; }}&gt;
+                &lt;div style={{ height: &quot;100%&quot;, width: `${total ? (col.count / total) * 100 : 0}%`, background: col.color, borderRadius: 4, transition: &quot;width 1s&quot; }} /&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+          ))}
+        &lt;/div&gt;
+
+        {/* Donut by priority */}
+        &lt;div style={{ background: &quot;#0D0F1A&quot;, border: &quot;1px solid #2A2D3A&quot;, borderRadius: 14, padding: 20 }}&gt;
+          &lt;h4 style={{ color: &quot;#DDD&quot;, margin: &quot;0 0 16px&quot;, fontSize: 14 }}&gt;Par priorité&lt;/h4&gt;
+          &lt;div style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 20 }}&gt;
+            &lt;svg width={120} height={120} viewBox=&quot;0 0 36 36&quot;&gt;
+              {(() =&gt; {
+                let offset = 0;
+                return byPriority.map(p =&gt; {
+                  const pct = total ? p.count / total : 0;
+                  const dash = pct * 100;
+                  const el = &lt;circle key={p.key} cx=&quot;18&quot; cy=&quot;18&quot; r=&quot;15.9&quot; fill=&quot;none&quot; stroke={p.color} strokeWidth=&quot;3&quot; strokeDasharray={`${dash} ${100 - dash}`} strokeDashoffset={-offset} style={{ transform: &quot;rotate(-90deg)&quot;, transformOrigin: &quot;50% 50%&quot; }} /&gt;;
+                  offset += dash;
+                  return el;
+                });
+              })()}
+              &lt;text x=&quot;18&quot; y=&quot;20&quot; textAnchor=&quot;middle&quot; fill=&quot;#F0F0FF&quot; fontSize=&quot;5&quot; fontWeight=&quot;bold&quot;&gt;{total}&lt;/text&gt;
+            &lt;/svg&gt;
+            &lt;div style={{ flex: 1 }}&gt;
+              {byPriority.map(p =&gt; (
+                &lt;div key={p.key} style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 8, marginBottom: 8 }}&gt;
+                  &lt;div style={{ width: 10, height: 10, borderRadius: &quot;50%&quot;, background: p.color }} /&gt;
+                  &lt;span style={{ color: &quot;#888&quot;, fontSize: 13, flex: 1 }}&gt;{p.label}&lt;/span&gt;
+                  &lt;span style={{ color: p.color, fontWeight: 600, fontSize: 13 }}&gt;{p.count}&lt;/span&gt;
+                &lt;/div&gt;
+              ))}
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+
+      {/* Recent / urgent tasks */}
+      &lt;div style={{ background: &quot;#0D0F1A&quot;, border: &quot;1px solid #2A2D3A&quot;, borderRadius: 14, padding: 20 }}&gt;
+        &lt;h4 style={{ color: &quot;#DDD&quot;, margin: &quot;0 0 14px&quot;, fontSize: 14 }}&gt;⚡ Tâches urgentes&lt;/h4&gt;
+        {tasks.filter(t =&gt; t.priority === &quot;high&quot; &amp;&amp; t.status !== &quot;done&quot;).map(task =&gt; (
+          &lt;div key={task.id} onClick={() =&gt; onTaskClick(task)} style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 12, padding: &quot;10px 0&quot;, borderBottom: &quot;1px solid #1A1D2E&quot;, cursor: &quot;pointer&quot; }}&gt;
+            &lt;div style={{ width: 8, height: 8, borderRadius: &quot;50%&quot;, background: task.color, boxShadow: `0 0 6px ${task.color}` }} /&gt;
+            &lt;div style={{ flex: 1, color: &quot;#DDD&quot;, fontSize: 13 }}&gt;{task.title}&lt;/div&gt;
+            &lt;div style={{ fontSize: 12, color: &quot;#666&quot; }}&gt;👤 {task.assignee}&lt;/div&gt;
+            &lt;div style={{ fontSize: 12, color: daysLeft(task.dueDate) !== null &amp;&amp; daysLeft(task.dueDate) &lt; 3 ? &quot;#FF6584&quot; : &quot;#888&quot; }}&gt;{formatDate(task.dueDate)}&lt;/div&gt;
+          &lt;/div&gt;
+        ))}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+
+// ─── NOTIFICATIONS PANEL ──────────────────────────────────────────────────────
+function NotifPanel({ tasks, onClose }) {
+  const reminders = tasks.flatMap(t =&gt; (t.reminders || []).map(r =&gt; ({ ...r, taskTitle: t.title, taskColor: t.color })));
+  const overdue = tasks.filter(t =&gt; t.dueDate &amp;&amp; daysLeft(t.dueDate) !== null &amp;&amp; daysLeft(t.dueDate) &lt; 0 &amp;&amp; t.status !== &quot;done&quot;);
+  const soon = tasks.filter(t =&gt; t.dueDate &amp;&amp; daysLeft(t.dueDate) !== null &amp;&amp; daysLeft(t.dueDate) &gt;= 0 &amp;&amp; daysLeft(t.dueDate) &lt;= 3 &amp;&amp; t.status !== &quot;done&quot;);
+
+  return (
+    &lt;div style={{ position: &quot;fixed&quot;, top: 60, right: 16, width: 360, background: &quot;#0F1117&quot;, border: &quot;1px solid #2A2D3A&quot;, borderRadius: 16, boxShadow: &quot;0 20px 60px rgba(0,0,0,0.6)&quot;, zIndex: 500, maxHeight: &quot;80vh&quot;, overflowY: &quot;auto&quot; }}&gt;
+      &lt;div style={{ padding: &quot;16px 20px&quot;, borderBottom: &quot;1px solid #2A2D3A&quot;, display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;center&quot; }}&gt;
+        &lt;span style={{ color: &quot;#F0F0FF&quot;, fontWeight: 700, fontSize: 15 }}&gt;🔔 Notifications&lt;/span&gt;
+        &lt;button onClick={onClose} style={{ background: &quot;none&quot;, border: &quot;none&quot;, color: &quot;#666&quot;, fontSize: 18, cursor: &quot;pointer&quot; }}&gt;✕&lt;/button&gt;
+      &lt;/div&gt;
+      &lt;div style={{ padding: 16 }}&gt;
+        {overdue.length &gt; 0 &amp;&amp; &lt;&gt;
+          &lt;div style={{ color: &quot;#FF6584&quot;, fontSize: 11, fontWeight: 700, textTransform: &quot;uppercase&quot;, letterSpacing: 1, marginBottom: 8 }}&gt;⚠ En retard&lt;/div&gt;
+          {overdue.map(t =&gt; (
+            &lt;div key={t.id} style={{ padding: &quot;10px 12px&quot;, background: &quot;#1A0D0D&quot;, border: &quot;1px solid #FF658433&quot;, borderRadius: 10, marginBottom: 8 }}&gt;
+              &lt;div style={{ color: &quot;#FF6584&quot;, fontSize: 13, fontWeight: 600 }}&gt;{t.title}&lt;/div&gt;
+              &lt;div style={{ color: &quot;#888&quot;, fontSize: 11 }}&gt;Échéance: {formatDate(t.dueDate)}&lt;/div&gt;
+            &lt;/div&gt;
+          ))}
+        &lt;/&gt;}
+        {soon.length &gt; 0 &amp;&amp; &lt;&gt;
+          &lt;div style={{ color: &quot;#FFB347&quot;, fontSize: 11, fontWeight: 700, textTransform: &quot;uppercase&quot;, letterSpacing: 1, marginBottom: 8, marginTop: 12 }}&gt;⏰ Bientôt&lt;/div&gt;
+          {soon.map(t =&gt; (
+            &lt;div key={t.id} style={{ padding: &quot;10px 12px&quot;, background: &quot;#1A1500&quot;, border: &quot;1px solid #FFB34733&quot;, borderRadius: 10, marginBottom: 8 }}&gt;
+              &lt;div style={{ color: &quot;#FFB347&quot;, fontSize: 13, fontWeight: 600 }}&gt;{t.title}&lt;/div&gt;
+              &lt;div style={{ color: &quot;#888&quot;, fontSize: 11 }}&gt;{daysLeft(t.dueDate)} jour(s) restants&lt;/div&gt;
+            &lt;/div&gt;
+          ))}
+        &lt;/&gt;}
+        {reminders.length &gt; 0 &amp;&amp; &lt;&gt;
+          &lt;div style={{ color: &quot;#6C63FF&quot;, fontSize: 11, fontWeight: 700, textTransform: &quot;uppercase&quot;, letterSpacing: 1, marginBottom: 8, marginTop: 12 }}&gt;🔔 Rappels programmés&lt;/div&gt;
+          {reminders.map(r =&gt; (
+            &lt;div key={r.id} style={{ padding: &quot;10px 12px&quot;, background: &quot;#0F0F1A&quot;, border: &quot;1px solid #6C63FF33&quot;, borderRadius: 10, marginBottom: 8 }}&gt;
+              &lt;div style={{ color: &quot;#CCC&quot;, fontSize: 13 }}&gt;{r.taskTitle}&lt;/div&gt;
+              &lt;div style={{ color: &quot;#888&quot;, fontSize: 11 }}&gt;{r.label} — {formatDate(r.date)}&lt;/div&gt;
+            &lt;/div&gt;
+          ))}
+        &lt;/&gt;}
+        {overdue.length === 0 &amp;&amp; soon.length === 0 &amp;&amp; reminders.length === 0 &amp;&amp; (
+          &lt;div style={{ textAlign: &quot;center&quot;, color: &quot;#555&quot;, padding: 24 }}&gt;Aucune notification&lt;/div&gt;
+        )}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+export default function App() {
+  const [tasks, setTasks] = useState(INITIAL_TASKS);
+  const [view, setView] = useState(&quot;kanban&quot;);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [isNew, setIsNew] = useState(false);
+  const [showNotif, setShowNotif] = useState(false);
+  const [search, setSearch] = useState(&quot;&quot;);
+  const [filterStatus, setFilterStatus] = useState(&quot;all&quot;);
+  const [filterPriority, setFilterPriority] = useState(&quot;all&quot;);
+  const [notifBadge, setNotifBadge] = useState(true);
+
+  // Browser notifications
+  useEffect(() =&gt; {
+    if (&quot;Notification&quot; in window &amp;&amp; Notification.permission === &quot;default&quot;) {
+      Notification.requestPermission();
+    }
+    const overdue = tasks.filter(t =&gt; t.dueDate &amp;&amp; daysLeft(t.dueDate) !== null &amp;&amp; daysLeft(t.dueDate) &lt; 0 &amp;&amp; t.status !== &quot;done&quot;);
+    if (overdue.length &gt; 0 &amp;&amp; Notification.permission === &quot;granted&quot;) {
+      new Notification(&quot;⚠ Tâches en retard&quot;, { body: `${overdue.length} tâche(s) en retard`, icon: &quot;📋&quot; });
+    }
+  }, []);
+
+  const filteredTasks = tasks.filter(t =&gt; {
+    if (search &amp;&amp; !t.title.toLowerCase().includes(search.toLowerCase()) &amp;&amp; !t.assignee.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterStatus !== &quot;all&quot; &amp;&amp; t.status !== filterStatus) return false;
+    if (filterPriority !== &quot;all&quot; &amp;&amp; t.priority !== filterPriority) return false;
+    return true;
+  });
+
+  const handleSaveTask = (task) =&gt; {
+    setTasks(prev =&gt; prev.some(t =&gt; t.id === task.id) ? prev.map(t =&gt; t.id === task.id ? task : t) : [...prev, task]);
+  };
+  const handleDeleteTask = (id) =&gt; setTasks(prev =&gt; prev.filter(t =&gt; t.id !== id));
+  const handleAddTask = (status) =&gt; {
+    setSelectedTask({ status });
+    setIsNew(true);
+  };
+  const handleTaskClick = (task, directUpdate = false) =&gt; {
+    if (directUpdate) { handleSaveTask(task); return; }
+    setSelectedTask(task);
+    setIsNew(false);
+  };
+
+  const notifCount = tasks.filter(t =&gt; (t.dueDate &amp;&amp; daysLeft(t.dueDate) !== null &amp;&amp; daysLeft(t.dueDate) &lt;= 3 &amp;&amp; t.status !== &quot;done&quot;) || (t.reminders?.length &gt; 0)).length;
+
+  return (
+    &lt;div style={{ minHeight: &quot;100vh&quot;, background: &quot;#080A12&quot;, fontFamily: &quot;&#39;DM Sans&#39;, &#39;Segoe UI&#39;, sans-serif&quot;, color: &quot;#F0F0FF&quot; }}&gt;
+      &lt;style&gt;{`
+        @import url(&#39;https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&amp;display=swap&#39;);
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0D0F1A; }
+        ::-webkit-scrollbar-thumb { background: #2A2D3A; border-radius: 3px; }
+        input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type=color]::-webkit-color-swatch { border: none; border-radius: 6px; }
+      `}&lt;/style&gt;
+
+      {/* TOPBAR */}
+      &lt;div style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 16, padding: &quot;12px 24px&quot;, borderBottom: &quot;1px solid #1E2130&quot;, background: &quot;#0D0F1A&quot;, position: &quot;sticky&quot;, top: 0, zIndex: 100 }}&gt;
+        &lt;div style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 10 }}&gt;
+          &lt;div style={{ width: 32, height: 32, borderRadius: 10, background: &quot;linear-gradient(135deg, #6C63FF, #43D9AD)&quot;, display: &quot;flex&quot;, alignItems: &quot;center&quot;, justifyContent: &quot;center&quot;, fontSize: 16 }}&gt;⬛&lt;/div&gt;
+          &lt;span style={{ fontWeight: 800, fontSize: 18, letterSpacing: -0.5, background: &quot;linear-gradient(90deg, #6C63FF, #43D9AD)&quot;, WebkitBackgroundClip: &quot;text&quot;, WebkitTextFillColor: &quot;transparent&quot; }}&gt;FlowBoard&lt;/span&gt;
+        &lt;/div&gt;
+
+        {/* Search */}
+        &lt;div style={{ position: &quot;relative&quot;, flex: 1, maxWidth: 320 }}&gt;
+          &lt;span style={{ position: &quot;absolute&quot;, left: 12, top: &quot;50%&quot;, transform: &quot;translateY(-50%)&quot;, color: &quot;#444&quot;, fontSize: 14 }}&gt;🔍&lt;/span&gt;
+          &lt;input value={search} onChange={e =&gt; setSearch(e.target.value)} placeholder=&quot;Rechercher...&quot; style={{ ...inputStyle, paddingLeft: 36, marginTop: 0, height: 36 }} /&gt;
+        &lt;/div&gt;
+
+        {/* Filters */}
+        &lt;select value={filterStatus} onChange={e =&gt; setFilterStatus(e.target.value)} style={{ ...inputStyle, marginTop: 0, height: 36, width: &quot;auto&quot;, paddingRight: 24 }}&gt;
+          &lt;option value=&quot;all&quot;&gt;Tous statuts&lt;/option&gt;
+          {COLUMNS.map(c =&gt; &lt;option key={c.id} value={c.id}&gt;{c.label}&lt;/option&gt;)}
+        &lt;/select&gt;
+        &lt;select value={filterPriority} onChange={e =&gt; setFilterPriority(e.target.value)} style={{ ...inputStyle, marginTop: 0, height: 36, width: &quot;auto&quot;, paddingRight: 24 }}&gt;
+          &lt;option value=&quot;all&quot;&gt;Toutes priorités&lt;/option&gt;
+          {Object.entries(PRIORITY_LABELS).map(([k, v]) =&gt; &lt;option key={k} value={k}&gt;{v}&lt;/option&gt;)}
+        &lt;/select&gt;
+
+        &lt;div style={{ marginLeft: &quot;auto&quot;, display: &quot;flex&quot;, gap: 10 }}&gt;
+          &lt;button onClick={() =&gt; { setShowNotif(s =&gt; !s); setNotifBadge(false); }} style={{ position: &quot;relative&quot;, background: &quot;#1A1D2E&quot;, border: &quot;1px solid #2A2D3A&quot;, color: &quot;#DDD&quot;, padding: &quot;6px 14px&quot;, borderRadius: 10, cursor: &quot;pointer&quot;, fontSize: 16, fontFamily: &quot;inherit&quot; }}&gt;
+            🔔
+            {notifBadge &amp;&amp; notifCount &gt; 0 &amp;&amp; &lt;span style={{ position: &quot;absolute&quot;, top: -4, right: -4, background: &quot;#FF6584&quot;, color: &quot;#fff&quot;, fontSize: 9, fontWeight: 700, width: 16, height: 16, borderRadius: &quot;50%&quot;, display: &quot;flex&quot;, alignItems: &quot;center&quot;, justifyContent: &quot;center&quot; }}&gt;{notifCount}&lt;/span&gt;}
+          &lt;/button&gt;
+          &lt;button onClick={() =&gt; handleAddTask(&quot;todo&quot;)} style={{ background: &quot;linear-gradient(135deg, #6C63FF, #4845C8)&quot;, border: &quot;none&quot;, color: &quot;#fff&quot;, padding: &quot;8px 18px&quot;, borderRadius: 10, cursor: &quot;pointer&quot;, fontSize: 13, fontWeight: 600, fontFamily: &quot;inherit&quot;, display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 6 }}&gt;
+            + Nouvelle tâche
+          &lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+
+      {/* VIEW TABS */}
+      &lt;div style={{ display: &quot;flex&quot;, gap: 4, padding: &quot;12px 24px 0&quot;, borderBottom: &quot;1px solid #1E2130&quot;, background: &quot;#0D0F1A&quot;, overflowX: &quot;auto&quot; }}&gt;
+        {VIEWS.map(v =&gt; (
+          &lt;button key={v.id} onClick={() =&gt; setView(v.id)} style={{
+            padding: &quot;8px 16px&quot;, borderRadius: &quot;10px 10px 0 0&quot;, border: &quot;none&quot;, cursor: &quot;pointer&quot;, fontFamily: &quot;inherit&quot;,
+            fontSize: 13, fontWeight: view === v.id ? 700 : 400, transition: &quot;all .2s&quot;,
+            background: view === v.id ? &quot;#080A12&quot; : &quot;transparent&quot;,
+            color: view === v.id ? &quot;#F0F0FF&quot; : &quot;#666&quot;,
+            borderBottom: view === v.id ? &quot;2px solid #6C63FF&quot; : &quot;2px solid transparent&quot;,
+            display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 6, whiteSpace: &quot;nowrap&quot;
+          }}&gt;
+            {v.icon} {v.label}
+          &lt;/button&gt;
+        ))}
+      &lt;/div&gt;
+
+      {/* CONTENT */}
+      &lt;div&gt;
+        {view === &quot;kanban&quot; &amp;&amp; &lt;KanbanView tasks={filteredTasks} onTaskClick={handleTaskClick} onAddTask={handleAddTask} /&gt;}
+        {view === &quot;list&quot; &amp;&amp; &lt;ListView tasks={filteredTasks} onTaskClick={handleTaskClick} /&gt;}
+        {view === &quot;gantt&quot; &amp;&amp; &lt;GanttView tasks={filteredTasks} onTaskClick={handleTaskClick} /&gt;}
+        {view === &quot;timeline&quot; &amp;&amp; &lt;TimelineView tasks={filteredTasks} onTaskClick={handleTaskClick} /&gt;}
+        {view === &quot;calendar&quot; &amp;&amp; &lt;CalendarView tasks={filteredTasks} onTaskClick={handleTaskClick} /&gt;}
+        {view === &quot;mindmap&quot; &amp;&amp; &lt;MindMapView tasks={filteredTasks} onTaskClick={handleTaskClick} /&gt;}
+        {view === &quot;spreadsheet&quot; &amp;&amp; &lt;SpreadsheetView tasks={filteredTasks} onTaskClick={handleTaskClick} /&gt;}
+        {view === &quot;dashboard&quot; &amp;&amp; &lt;DashboardView tasks={filteredTasks} onTaskClick={handleTaskClick} /&gt;}
+      &lt;/div&gt;
+
+      {/* MODAL */}
+      {selectedTask &amp;&amp; (
+        &lt;TaskModal
+          task={isNew ? null : selectedTask}
+          onClose={() =&gt; setSelectedTask(null)}
+          onSave={task =&gt; handleSaveTask(isNew ? { ...task, status: selectedTask.status || &quot;todo&quot; } : task)}
+          onDelete={handleDeleteTask}
+        /&gt;
+      )}
+
+      {/* NOTIF PANEL */}
+      {showNotif &amp;&amp; &lt;NotifPanel tasks={tasks} onClose={() =&gt; setShowNotif(false)} /&gt;}
+    &lt;/div&gt;
+  );
+}</code></pre>
